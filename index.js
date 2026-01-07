@@ -1,28 +1,19 @@
-import express from "express";
+const express = require("express");
+const userRouter = require("./routes/user");
+const {courseRouter} = require("./routes/course");
 
 const app = express();
 const PORT = 3000;
+
 app.use(express.json());
 
-const {userRouter , courseRouter} = require("./routes")
+app.get("/", (req, res) => {
+  res.json({ message: "Hello World" });
+});
 
-app.get("/" , (req,res)=>{
-    res.json({
-        message : "Hello World"
-    })
-})
+app.use("/api/v1/user", userRouter);
+app.use("/api/v1/course", courseRouter);
 
-app.use("/user" , userRouter);
-app.use("/course" , courseRouter);
-
-app.post("/course/purchase" , (req,res)=>{
-    res.json("Course Purchase Endpoint")
-})
-
-app.get("/course/bulk" , (req,res)=>{
-    res.json("Get All Purchases")
-})
-
-app.listen(PORT , ()=>{
-    console.log(`Server is Running on PORT ${PORT}` )
-})
+app.listen(PORT, () => {
+  console.log(`Server is running on PORT ${PORT}`);
+});
