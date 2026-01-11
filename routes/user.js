@@ -1,25 +1,27 @@
 const { Router } = require("express");
-const { userModel } = require("../db");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
-const {JWT_USER_PASSWORD} = require("../config")
-const SALT_ROUNDS = Number(process.env.SALT_ROUNDS)
 
+const { userModel, courseModel, purchaseModel } = require("../db");
+const { userMiddleware } = require("../middleware/user");
+const { JWT_USER_PASSWORD } = require("../config");
 
-// ADD ZOD later
+const SALT_ROUNDS = Number(process.env.SALT_ROUNDS);
 
 const userRouter = Router();
 
+/* ========================= SIGNUP ========================= */
 userRouter.post("/signup", async (req, res) => {
   const { email, password, firstName, lastName } = req.body;
+
   try {
-    // Find Existing in DB
     const existingUser = await userModel.findOne({ email });
     if (existingUser) {
       return res.status(409).json({ message: "User already exists" });
     }
 
     const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
+
     await userModel.create({
       email,
       password: hashedPassword,
@@ -29,49 +31,61 @@ userRouter.post("/signup", async (req, res) => {
 
     return res.status(200).json({ message: "User Created Successfully" });
   } catch (error) {
-    console.log("Error Occured ", error);
-    return res.status(500).json({
-      message: "Internal Server Error",
-    });
+    return res.status(500).json({ message: "Internal Server Error" });
   }
-  
 });
 
+/* ========================= SIGNIN ========================= */
 userRouter.post("/signin", async (req, res) => {
   const { email, password } = req.body;
+
   try {
-    const user = await userModel.findOne({ email : email});
+    const user = await userModel.findOne({ email });
     if (!user) {
       return res.status(400).json({ message: "Invalid Email" });
     }
 
     const isValidPassword = await bcrypt.compare(password, user.password);
     if (!isValidPassword) {
-
-      return res.status(400).json({
-        message: "Wrong Password",
-      });
+      return res.status(400).json({ message: "Wrong Password" });
     }
 
-    const token = jwt.sign({
-        id : user._id
-    }, JWT_USER_PASSWORD)
+    const token = jwt.sign({ id: user._id }, JWT_USER_PASSWORD);
 
     return res.status(200).json({
       message: "SignIn Successful",
-      token : token
+      token,
     });
   } catch (error) {
-    console.error("Error occurred:", error);
-    return res.status(500).json({
-      message: "Internal server error",
-    });
+    return res.status(500).json({ message: "Internal Server Error" });
   }
-
 });
 
-userRouter.get("/purchases", (req, res) => {
-  res.send("User Purchases Endpoint");
+/* ========================= PURCHASED COURSES (MAP APPROACH) ========================= */
+userRouter.get("/purchases", userMiddleware, async (req, res) => {
+  try {
+    const userId = req.userId;
+
+    // 1. Get all purchases of user
+    const purchases = await purchaseModel.find({ userId });
+
+    // 2. Extract courseIds
+    const courseIds = purchases.map(p => p.courseId);
+
+    // 3. Fetch full course data
+    const courses = await courseModel.find({
+      _id: { $in: courseIds }
+    });
+
+    return res.status(200).json({
+      purchases,
+      courses
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Internal Server Error"
+    });
+  }
 });
 
 module.exports = userRouter;
